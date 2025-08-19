@@ -48,6 +48,8 @@ class SimulinkParser:
         mask_detection = block.find("Mask")
         # Get link to another system, if Subsystem Block
         system_ref_detect = block.find("System")
+        # Get Port Details
+        port_detect = block.find("Port")
         for parameter in parameters:
             temp[list(parameter.attrib.values())[0]] = parameter.text
         if mask_detection is not None:
@@ -64,6 +66,11 @@ class SimulinkParser:
             ref = list(system_ref_detect.attrib.values())[0]
             tree_output = ET.parse(self.__util_find_file(ref + ".xml"))
             temp["children"] = self.__util_read_tree(tree_output.getroot())
+
+        if port_detect is not None:
+            params = port_detect.findall("P")
+            for param in params:
+                temp["Port_" + list(param.attrib.values())[0]] = param.text
         return temp
 
     def __util_read_tree(self,element):
@@ -72,6 +79,17 @@ class SimulinkParser:
         for block in block_list:
             new_block_list.append(self.__util_blk_info(block))
         return new_block_list
+
+    def fcn_find_block(self, block_list, prop, value):
+        if block_list:
+            for block in block_list:
+                if prop in block and block[prop] == value:
+                    return block
+                if "children" in block.keys():
+                    result = self.fcn_find_block(block["children"],prop,value)
+                    if result:
+                        return result
+        return None
 
     def fcn_parse_model(self,file_path):
         file_path_list = self.__util_unzip_files(file_path)
