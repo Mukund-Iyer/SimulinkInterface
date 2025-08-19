@@ -75,10 +75,49 @@ class SimulinkParser:
 
     def __util_read_tree(self,element):
         block_list = element.findall("Block")
+        line_list = self.fcn_find_conns(element)
         new_block_list = []
         for block in block_list:
             new_block_list.append(self.__util_blk_info(block))
         return new_block_list
+
+    def __util_branch_handling(self,branch,temp):
+        branch_params = branch.findall("P")
+        nested_branch_detect = branch.findall("Branch")
+        for branch_param in branch_params:
+            if branch_param.attrib['Name'] == "Src" or branch_param.attrib['Name'] == "Dst":
+                if "Branch_" + branch_param.attrib['Name'] in temp:
+                    if isinstance(temp["Branch_" + branch_param.attrib['Name']], str):
+                        temp_var = temp["Branch_" + branch_param.attrib['Name']]
+                        temp["Branch_" + branch_param.attrib['Name']] = []
+                        temp["Branch_" + branch_param.attrib['Name']].append(temp_var)
+                        temp["Branch_" + branch_param.attrib['Name']].append(branch_param.text)
+                    else:
+                        temp["Branch_" + branch_param.attrib['Name']].append(branch_param.text)
+                else:
+                    temp["Branch_" + branch_param.attrib['Name']] = branch_param.text
+        if nested_branch_detect:
+            for branch in nested_branch_detect:
+                temp = self.__util_branch_handling(branch,temp)
+        return temp
+
+    def fcn_find_conns(self,element):
+        line_list = element.findall("Line")
+        conn_list = []
+        for line in line_list:
+            temp = {}
+            params = line.findall("P")
+            branches = line.findall("Branch")
+            for param in params:
+                if param.attrib['Name'] == "Src" or param.attrib['Name'] == "Dst":
+                    temp[param.attrib['Name']] = param.text
+
+            if branches:
+                for branch in branches:
+                    temp = self.__util_branch_handling(branch,temp)
+
+            conn_list.append(temp)
+        return conn_list
 
     def fcn_find_block(self, block_list, prop, value):
         if block_list:
