@@ -1,5 +1,4 @@
 from SimulinkParser import SimulinkParser
-parser = SimulinkParser()
-x = parser.fcn_parse_model("C:\Work\ModelDiffTool\L3DrvMon_MDCE_SHELL.slx")
-y = parser.fcn_find_block(x,"SID","724")
+parser = SimulinkParser("C:\Work\ModelDiffTool\L3DrvMon_MDCE_SHELL.slx")
+x = parser.find_system("SID", "724")
 print(x)
