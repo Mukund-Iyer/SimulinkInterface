@@ -3,6 +3,13 @@ import xml.etree.ElementTree as eT
 import os
 import zipfile
 
+class SimulinkParser:
+    def __init__(self,path):
+        self.Model = SimulinkModel(path)
+
+    def find_system(self,prop, value):
+        return SimulinkModel.find_system(self.Model.block_list,prop,value)
+
 class SimulinkModel:
     def __init__(self,model_path):
         self.tempFolderPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
@@ -46,13 +53,14 @@ class SimulinkModel:
             new_block_list.append(simulink_block.details)
         return new_block_list
 
-    def find_system(self, input_block_list,prop, value):
+    @staticmethod
+    def find_system(input_block_list,prop, value):
         if input_block_list:
             for block in input_block_list:
                 if prop in block and block[prop] == value:
                     return block
                 if "children" in block.keys():
-                    result = self.find_system(block["children"], prop, value)
+                    result = SimulinkModel.find_system(block["children"], prop, value)
                     if result:
                         return result
         return None
