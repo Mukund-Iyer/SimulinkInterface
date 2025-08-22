@@ -1,3 +1,2 @@
 import SimulinkInterface
-model = SimulinkInterface.SimulinkModel("C:\Work\ModelDiffTool\L3DrvMon_MDCE_SHELL.slx")
-print(model.block_list)
+model = SimulinkInterface.SimulinkModel("path/to/simulink_model.slx")
