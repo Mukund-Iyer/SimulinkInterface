@@ -147,14 +147,31 @@ class Grapher:
     @staticmethod
     def __util_set_node(dot,block):
         if block["BlockType"] == "Inport" or block["BlockType"] == "Outport":
-            return dot.node(block["Name"],block["Name"],shape='box',style='rounded')
+            return dot.node(block["Name"],block["Name"],shape='box',style='rounded',tooltip=Grapher.__get_block_val(block))
         elif block["BlockType"] == "SubSystem":
             probable_path = os.path.join(os.getcwd(), "output", block["Name"] + ".svg")
             if not os.path.isfile(probable_path):
                 Grapher(block["children"],block["child_conns"],block["Name"])
-            return dot.node(block["Name"], block["Name"], shape='box',URL=block["Name"] + ".svg")
+            return dot.node(block["Name"], block["Name"], shape='box',URL=block["Name"] + ".svg",tooltip=Grapher.__get_block_val(block))
+        elif block["BlockType"] == "Logic" or block["BlockType"] == "RelationalOperator":
+            if "Operator" not in block.keys():
+                return dot.node(block["Name"], block["Name"], shape='box',tooltip=Grapher.__get_block_val(block))
+            else:
+                return dot.node(block["Name"], block["Operator"], shape='box',tooltip=Grapher.__get_block_val(block))
+        elif block["BlockType"] == "Constant":
+            return dot.node(block["Name"], block["Value"], shape='box',tooltip=Grapher.__get_block_val(block))
+        elif block["BlockType"] == "If":
+            return dot.node(block["Name"], block["BlockType"] + "\n" + block["IfExpression"], shape='box', tooltip=Grapher.__get_block_val(block))
         else:
-            return dot.node(block["Name"], block["Name"], shape='box')
+            return dot.node(block["Name"], block["Name"], shape='box',tooltip=Grapher.__get_block_val(block))
+
+    @staticmethod
+    def __get_block_val(block):
+        excluded_keys = {'children', 'child_conns'}
+        #formatted_text = '\n'.join(f"{k}: {v}" for d in block for k, v in d.items())
+        #formatted_text = '\n'.join(f"{k}: {v}" for k, v in block.items())
+        formatted_text = '\n'.join(f"{k}: {v}" for k, v in block.items() if k not in excluded_keys)
+        return formatted_text
 
     def visualize(self,connections:list,name:str):
         dot = Digraph(comment='Custom Node Shapes')
