@@ -13,7 +13,8 @@ Features
 Requirements
 ------------
 - Python 3.10+
-- Uses GraphViz and other standard libraries such as: os, shutil, zipfile, xml.etree.ElementTree)
+- Install GraphViz (or) download GraphViz binaries, modify the Environment variable "Path" to include path to "bin" folder of the downloaded GraphViz binaries.
+- Uses other standard libraries such as: os, shutil, zipfile, xml.etree.ElementTree)
 
 Usage
 -----
@@ -57,4 +58,8 @@ Example
 
 License
 -------
-This project is released under the MIT License.
+This project is licensed under the MIT License.
+This project also includes components developed by:
+- AT&T and the GraphViz community, which are licensed under the Eclipse Public License (EPL). 
+
+Please refer to the respective licenses for more details.
