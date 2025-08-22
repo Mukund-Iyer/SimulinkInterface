@@ -62,14 +62,17 @@ class SimulinkParser:
         for parameter in parameters:
             temp[list(parameter.attrib.values())[0]] = parameter.text
         if mask_detection is not None:
-            temp["Mask_Type"] = mask_detection.find("Type").text
-            temp["Mask_Help"] = mask_detection.find("Help").text
+            if mask_detection.find("Type") is not None:
+                temp["Mask_Type"] = mask_detection.find("Type").text
+            if mask_detection.find("Help") is not None:
+                temp["Mask_Help"] = mask_detection.find("Help").text
             mask_param = mask_detection.find("MaskParameter")
-            mask_param_value = mask_param.find("Value").text
-            mask_param = mask_param.attrib
-            mask_param = {f"Mask_Parameter_{key}": value for key, value in mask_param.items()}
-            mask_param["Mask_Parameter_Value"] = mask_param_value
-            temp = temp | mask_param
+            if mask_param is not None:
+                mask_param_value = mask_param.find("Value").text
+                mask_param = mask_param.attrib
+                mask_param = {f"Mask_Parameter_{key}": value for key, value in mask_param.items()}
+                mask_param["Mask_Parameter_Value"] = mask_param_value
+                temp = temp | mask_param
 
         if system_ref_detect is not None:
             ref = list(system_ref_detect.attrib.values())[0]
