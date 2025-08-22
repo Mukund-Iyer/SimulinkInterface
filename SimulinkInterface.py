@@ -18,7 +18,7 @@ class SimulinkModel:
             shutil.rmtree(self.__tempFolderPath)
         self.block_list = sp.blocks
         self.connection_list = sp.connections
-        Grapher(self)
+        Grapher(self.block_list,self.connection_list)
 
     def __util_unzip_files(self):
         file_path_list = []
@@ -127,10 +127,10 @@ class SimulinkParser:
         return None
 
 class Grapher:
-    def __init__(self,model:SimulinkModel):
-        self.blocks = model.block_list
-        self.conns = model.connection_list
-        self.visualize(self.conns)
+    def __init__(self,block_list,connections,model_name="root"):
+        self.blocks = block_list
+        self.conns = connections
+        self.visualize(self.conns,model_name)
 
     @staticmethod
     def __util_find_block(input_block_list, prop, value):
@@ -144,22 +144,40 @@ class Grapher:
                         return result
         return None
 
-    def visualize(self,connections:list):
+    @staticmethod
+    def __util_set_node(dot,block):
+        if block["BlockType"] == "Inport" or block["BlockType"] == "Outport":
+            return dot.node(block["Name"],block["Name"],shape='box',style='rounded')
+        elif block["BlockType"] == "SubSystem":
+            probable_path = os.path.join(os.getcwd(), "output", block["Name"] + ".svg")
+            if not os.path.isfile(probable_path):
+                Grapher(block["children"],block["child_conns"],block["Name"])
+            return dot.node(block["Name"], block["Name"], shape='box',URL=block["Name"] + ".svg")
+        else:
+            return dot.node(block["Name"], block["Name"], shape='box')
+
+    def visualize(self,connections:list,name:str):
         dot = Digraph(comment='Custom Node Shapes')
         dot.attr(rankdir='LR')
 
         for connection in connections:
             src_blk_sid = connection["Src"]
-            dst_blks = connection["Dst"]
+            if "Dst" in connection.keys():
+                dst_blks = connection["Dst"]
+            else:
+                dst_blks = connection["Branch_Dst"]
             src_block = Grapher.__util_find_block(self.blocks, "SID", src_blk_sid)
-            dot.node(src_block["Name"], src_block["Name"], shape='box')
+            Grapher.__util_set_node(dot,src_block)
+            #dot.node(src_block["Name"], src_block["Name"], shape='box')
             if isinstance(dst_blks,list):
                 for dst_blk_sid in dst_blks:
                     dst_block = Grapher.__util_find_block(self.blocks, "SID", dst_blk_sid)
-                    dot.node(dst_block["Name"], dst_block["Name"], shape='box')
-                    dot.edge(src_block["Name"], dst_block["Name"])
+                    Grapher.__util_set_node(dot, dst_block)
+                    #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
+                    dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
             elif isinstance(dst_blks,str):
                 dst_block = Grapher.__util_find_block(self.blocks, "SID", dst_blks)
-                dot.node(dst_block["Name"], dst_block["Name"], shape='box')
-                dot.edge(src_block["Name"], dst_block["Name"])
-        dot.render('custom_shapes_graph', format='png', cleanup=True)
+                Grapher.__util_set_node(dot, dst_block)
+                #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
+                dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
+        dot.render(os.path.join(os.getcwd(),"output",name), format='svg', cleanup=True)
