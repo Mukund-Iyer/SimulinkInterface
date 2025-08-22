@@ -2,6 +2,7 @@ import shutil
 import xml.etree.ElementTree as eT
 import os
 import zipfile
+from graphviz import Digraph
 
 class SimulinkModel:
     def __init__(self, model_path):
@@ -17,6 +18,7 @@ class SimulinkModel:
             shutil.rmtree(self.__tempFolderPath)
         self.block_list = sp.blocks
         self.connection_list = sp.connections
+        Grapher(self)
 
     def __util_unzip_files(self):
         file_path_list = []
@@ -123,3 +125,41 @@ class SimulinkParser:
             if target_file_name in files:
                 return os.path.join(root, target_file_name)
         return None
+
+class Grapher:
+    def __init__(self,model:SimulinkModel):
+        self.blocks = model.block_list
+        self.conns = model.connection_list
+        self.visualize(self.conns)
+
+    @staticmethod
+    def __util_find_block(input_block_list, prop, value):
+        if input_block_list:
+            for block in input_block_list:
+                if prop in block and block[prop] == value:
+                    return block
+                if "children" in block.keys():
+                    result = Grapher.__util_find_block(block["children"], prop, value)
+                    if result:
+                        return result
+        return None
+
+    def visualize(self,connections:list):
+        dot = Digraph(comment='Custom Node Shapes')
+        dot.attr(rankdir='LR')
+
+        for connection in connections:
+            src_blk_sid = connection["Src"]
+            dst_blks = connection["Dst"]
+            src_block = Grapher.__util_find_block(self.blocks, "SID", src_blk_sid)
+            dot.node(src_block["Name"], src_block["Name"], shape='box')
+            if isinstance(dst_blks,list):
+                for dst_blk_sid in dst_blks:
+                    dst_block = Grapher.__util_find_block(self.blocks, "SID", dst_blk_sid)
+                    dot.node(dst_block["Name"], dst_block["Name"], shape='box')
+                    dot.edge(src_block["Name"], dst_block["Name"])
+            elif isinstance(dst_blks,str):
+                dst_block = Grapher.__util_find_block(self.blocks, "SID", dst_blks)
+                dot.node(dst_block["Name"], dst_block["Name"], shape='box')
+                dot.edge(src_block["Name"], dst_block["Name"])
+        dot.render('custom_shapes_graph', format='png', cleanup=True)
