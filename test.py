@@ -1,4 +1,3 @@
-from SimulinkInterface import SimulinkParser
-parser = SimulinkParser("C:\Work\ModelDiffTool\L3DrvMon_MDCE_SHELL.slx")
-x = parser.find_system("SID", "724")
-print(x)
+import SimulinkParser_v2
+parser = SimulinkParser_v2.SimulinkModel("C:\Work\ModelDiffTool\L3DrvMon_MDCE_SHELL.slx")
+print(parser.block_list)
