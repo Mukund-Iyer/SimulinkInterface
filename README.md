@@ -1,7 +1,7 @@
-SimulinkParser
+SimulinkInterface
 ================
 
-SimulinkParser is a Python utility designed to parse Simulink model files (.slx). It extracts detailed block-level information, including parameters, masks, and subsystem hierarchies. It also has generates interactive SVG files that emulates Simulink model viewer.
+SimulinkInterface is a Python utility designed to parse Simulink model files (.slx). It extracts detailed block-level information, including parameters, masks, and subsystem hierarchies. It also has generates interactive SVG files that emulates Simulink model viewer.
 
 Features
 --------
