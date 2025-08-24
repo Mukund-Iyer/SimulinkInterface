@@ -38,12 +38,13 @@ class SimulinkParser:
         self.tempFolderPath = temp_folder_path
         self.blocks,self.connections = self.__util_parse_tree(self.tree.getroot())
 
-    def __util_parse_tree(self,element):
+    def __util_parse_tree(self,element,parent="root"):
         block_list = element.findall("Block")
         conn_list = self.__util_find_conns(element)
         new_block_list = []
         for block in block_list:
             simulink_block = self.__util_blk_info(block)
+            simulink_block["Parent_SID"] = parent
             new_block_list.append(simulink_block)
         return new_block_list,conn_list
 
@@ -77,7 +78,7 @@ class SimulinkParser:
         if system_ref_detect is not None:
             ref = list(system_ref_detect.attrib.values())[0]
             tree_output = eT.parse(self.__util_find_file(ref + ".xml"))
-            temp["children"],temp["child_conns"] = self.__util_parse_tree(tree_output.getroot())
+            temp["children"],temp["child_conns"] = self.__util_parse_tree(tree_output.getroot(),temp["SID"])
 
         if port_detect is not None:
             params = port_detect.findall("P")
