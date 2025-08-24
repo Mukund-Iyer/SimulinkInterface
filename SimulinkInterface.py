@@ -136,13 +136,13 @@ class Grapher:
         self.visualize(self.conns,model_name)
 
     @staticmethod
-    def __util_find_block(input_block_list, prop, value):
+    def find_block(input_block_list, prop, value):
         if input_block_list:
             for block in input_block_list:
                 if prop in block and block[prop] == value:
                     return block
                 if "children" in block.keys():
-                    result = Grapher.__util_find_block(block["children"], prop, value)
+                    result = Grapher.find_block(block["children"], prop, value)
                     if result:
                         return result
         return None
@@ -186,17 +186,17 @@ class Grapher:
                 dst_blks = connection["Dst"]
             else:
                 dst_blks = connection["Branch_Dst"]
-            src_block = Grapher.__util_find_block(self.blocks, "SID", src_blk_sid)
+            src_block = Grapher.find_block(self.blocks, "SID", src_blk_sid)
             Grapher.__util_set_node(dot,src_block)
             #dot.node(src_block["Name"], src_block["Name"], shape='box')
             if isinstance(dst_blks,list):
                 for dst_blk_sid in dst_blks:
-                    dst_block = Grapher.__util_find_block(self.blocks, "SID", dst_blk_sid)
+                    dst_block = Grapher.find_block(self.blocks, "SID", dst_blk_sid)
                     Grapher.__util_set_node(dot, dst_block)
                     #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
                     dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
             elif isinstance(dst_blks,str):
-                dst_block = Grapher.__util_find_block(self.blocks, "SID", dst_blks)
+                dst_block = Grapher.find_block(self.blocks, "SID", dst_blks)
                 Grapher.__util_set_node(dot, dst_block)
                 #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
                 dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
