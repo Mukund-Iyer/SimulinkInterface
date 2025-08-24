@@ -18,7 +18,7 @@ class SimulinkModel:
             shutil.rmtree(self.__tempFolderPath)
         self.block_list = sp.blocks
         self.connection_list = sp.connections
-        Grapher(self.block_list,self.connection_list)
+        self.GraphingObject = GraphingInterface(self.block_list, self.connection_list)
 
     def __util_unzip_files(self):
         file_path_list = []
@@ -130,7 +130,7 @@ class SimulinkParser:
                 return os.path.join(root, target_file_name)
         return None
 
-class Grapher:
+class GraphingInterface:
     def __init__(self,block_list,connections,model_name="root"):
         self.blocks = block_list
         self.conns = connections
@@ -143,7 +143,7 @@ class Grapher:
                 if prop in block and block[prop] == value:
                     return block
                 if "children" in block.keys():
-                    result = Grapher.find_block(block["children"], prop, value)
+                    result = GraphingInterface.find_block(block["children"], prop, value)
                     if result:
                         return result
         return None
@@ -151,29 +151,27 @@ class Grapher:
     @staticmethod
     def __util_set_node(dot,block):
         if block["BlockType"] == "Inport" or block["BlockType"] == "Outport":
-            return dot.node(block["Name"],block["Name"],shape='box',style='rounded',tooltip=Grapher.__get_block_val(block))
+            return dot.node(block["Name"], block["Name"], shape='box', style='rounded', tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "SubSystem":
             probable_path = os.path.join(os.getcwd(), "output", block["Name"] + ".svg")
             if not os.path.isfile(probable_path):
-                Grapher(block["children"],block["child_conns"],block["Name"])
-            return dot.node(block["Name"], block["Name"], shape='box',URL=block["Name"] + ".svg",tooltip=Grapher.__get_block_val(block))
+                GraphingInterface(block["children"], block["child_conns"], block["Name"])
+            return dot.node(block["Name"], block["Name"], shape='box', URL=block["Name"] + ".svg", tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "Logic" or block["BlockType"] == "RelationalOperator":
             if "Operator" not in block.keys():
-                return dot.node(block["Name"], block["Name"], shape='box',tooltip=Grapher.__get_block_val(block))
+                return dot.node(block["Name"], block["Name"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
             else:
-                return dot.node(block["Name"], block["Operator"], shape='box',tooltip=Grapher.__get_block_val(block))
+                return dot.node(block["Name"], block["Operator"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "Constant":
-            return dot.node(block["Name"], block["Value"], shape='box',tooltip=Grapher.__get_block_val(block))
+            return dot.node(block["Name"], block["Value"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "If":
-            return dot.node(block["Name"], block["BlockType"] + "\n" + block["IfExpression"], shape='box', tooltip=Grapher.__get_block_val(block))
+            return dot.node(block["Name"], block["BlockType"] + "\n" + block["IfExpression"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
         else:
-            return dot.node(block["Name"], block["Name"], shape='box',tooltip=Grapher.__get_block_val(block))
+            return dot.node(block["Name"], block["Name"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
 
     @staticmethod
     def __get_block_val(block):
         excluded_keys = {'children', 'child_conns'}
-        #formatted_text = '\n'.join(f"{k}: {v}" for d in block for k, v in d.items())
-        #formatted_text = '\n'.join(f"{k}: {v}" for k, v in block.items())
         formatted_text = '\n'.join(f"{k}: {v}" for k, v in block.items() if k not in excluded_keys)
         return formatted_text
 
@@ -182,23 +180,23 @@ class Grapher:
         dot.attr(rankdir='LR')
 
         for connection in connections:
-            src_blk_sid = connection["Src"]
+            src_block_sid = connection["Src"]
             if "Dst" in connection.keys():
-                dst_blks = connection["Dst"]
+                dst_block_sids = connection["Dst"]
             else:
-                dst_blks = connection["Branch_Dst"]
-            src_block = Grapher.find_block(self.blocks, "SID", src_blk_sid)
-            Grapher.__util_set_node(dot,src_block)
+                dst_block_sids = connection["Branch_Dst"]
+            src_block = GraphingInterface.find_block(self.blocks, "SID", src_block_sid)
+            GraphingInterface.__util_set_node(dot, src_block)
             #dot.node(src_block["Name"], src_block["Name"], shape='box')
-            if isinstance(dst_blks,list):
-                for dst_blk_sid in dst_blks:
-                    dst_block = Grapher.find_block(self.blocks, "SID", dst_blk_sid)
-                    Grapher.__util_set_node(dot, dst_block)
+            if isinstance(dst_block_sids,list):
+                for dst_blk_sid in dst_block_sids:
+                    dst_block = GraphingInterface.find_block(self.blocks, "SID", dst_blk_sid)
+                    GraphingInterface.__util_set_node(dot, dst_block)
                     #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
                     dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
-            elif isinstance(dst_blks,str):
-                dst_block = Grapher.find_block(self.blocks, "SID", dst_blks)
-                Grapher.__util_set_node(dot, dst_block)
+            elif isinstance(dst_block_sids,str):
+                dst_block = GraphingInterface.find_block(self.blocks, "SID", dst_block_sids)
+                GraphingInterface.__util_set_node(dot, dst_block)
                 #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
                 dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
         dot.render(os.path.join(os.getcwd(),"output",name), format='svg', cleanup=True)
