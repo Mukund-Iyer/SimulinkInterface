@@ -171,9 +171,13 @@ class GraphingInterface:
 
     @staticmethod
     def __get_block_val(block):
-        excluded_keys = {'children', 'child_conns'}
-        formatted_text = '\n'.join(f"{k}: {v}" for k, v in block.items() if k not in excluded_keys)
-        return formatted_text
+        excluded_keys = {'children', 'child_conns','Mask_Help'}
+        lines = (
+            f"{k}: {v}"
+            for k, v in block.items()
+            if k not in excluded_keys and not str(k).startswith("Mask_Parameter")
+        )
+        return '\n'.join(lines)
 
     def visualize(self,connections:list,name:str):
         dot = Digraph(comment='Custom Node Shapes')
