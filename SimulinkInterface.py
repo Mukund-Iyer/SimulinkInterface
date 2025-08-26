@@ -237,20 +237,22 @@ class GraphingInterface:
         for block in self.blocks:
             GraphingInterface.__util_create_node(dot,block)
 
-        added_edges = set()
+        added_edges = []
 
         for block in self.blocks:
             for i, src in enumerate(block["ports"]["In"]):
-                edge = (src, block["SID"], "in", i)
+                edge = src + "->" + block["SID"]
+                src_blk = self.find_block(self.blocks,"SID",src)
                 if edge not in added_edges:
-                    dot.edge(src + ":out" + str(i), block["SID"] + ":in" + str(i))#, tailport='e', headport='w')
-                    added_edges.add(edge)
+                    dot.edge(src + ":out" + str(src_blk["ports"]["Out"].index(block["SID"])), block["SID"] + ":in" + str(i))#, tailport='e', headport='w')
+                    added_edges.append(edge)
 
             for i, dst in enumerate(block["ports"]["Out"]):
-                edge = (block["SID"], dst, "out", i)
+                edge = block["SID"] + "->" + dst
+                dst_blk = self.find_block(self.blocks,"SID",dst)
                 if edge not in added_edges:
-                    dot.edge(block["SID"] + ":out" + str(i), dst + ":in" + str(i))#, tailport='e', headport='w')
-                    added_edges.add(edge)
+                    dot.edge(block["SID"] + ":out" + str(i), dst + ":in" + str(dst_blk["ports"]["In"].index(block["SID"])))#, tailport='e', headport='w')
+                    added_edges.append(edge)
 
         """
         for block in self.blocks:
