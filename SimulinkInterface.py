@@ -17,8 +17,7 @@ class SimulinkModel:
         if os.path.isdir(self.__tempFolderPath):
             shutil.rmtree(self.__tempFolderPath)
         self.block_list = sp.blocks
-        self.connection_list = sp.connections
-        self.GraphingObject = GraphingInterface(self.block_list, self.connection_list)
+        #self.GraphingObject = GraphingInterface(self.block_list)
 
     def __util_unzip_files(self):
         file_path_list = []
@@ -36,19 +35,19 @@ class SimulinkParser:
     def __init__(self,input_tree,temp_folder_path):
         self.tree = input_tree
         self.tempFolderPath = temp_folder_path
-        self.blocks,self.connections = self.__util_parse_tree(self.tree.getroot())
+        self.blocks = self.__util_parse_tree(self.tree.getroot())
 
     def __util_parse_tree(self,element,parent="root"):
         block_list = element.findall("Block")
-        conn_list = self.__util_find_conns(element)
+        conn_list = self.__util_find_all_conns(element)
         new_block_list = []
         for block in block_list:
-            simulink_block = self.__util_blk_info(block)
+            simulink_block = self.__util_blk_info(block,conn_list)
             simulink_block["Parent_SID"] = parent
             new_block_list.append(simulink_block)
-        return new_block_list,conn_list
+        return new_block_list
 
-    def __util_blk_info(self, block):
+    def __util_blk_info(self, block, connections):
         temp = block.__copy__()
         # Collect the first set of attributes of the Simulink block
         temp = temp.attrib
@@ -78,12 +77,17 @@ class SimulinkParser:
         if system_ref_detect is not None:
             ref = list(system_ref_detect.attrib.values())[0]
             tree_output = eT.parse(self.__util_find_file(ref + ".xml"))
-            temp["children"],temp["child_conns"] = self.__util_parse_tree(tree_output.getroot(),temp["SID"])
+            temp["children"] = self.__util_parse_tree(tree_output.getroot(),temp["SID"])
 
         if port_detect is not None:
             params = port_detect.findall("P")
             for param in params:
                 temp["Port_" + list(param.attrib.values())[0]] = param.text
+
+        in_ports, out_ports = self.__util_find_conns(temp["SID"], connections)
+        temp["in_connections"] = in_ports
+        temp["out_connections"] = out_ports
+
         return temp
 
     def __util_branch_handling(self,branch,temp):
@@ -106,7 +110,7 @@ class SimulinkParser:
                 temp = self.__util_branch_handling(branch,temp)
         return temp
 
-    def __util_find_conns(self,element):
+    def __util_find_all_conns(self, element):
         line_list = element.findall("Line")
         conn_list = []
         for line in line_list:
@@ -124,6 +128,20 @@ class SimulinkParser:
             conn_list.append(temp)
         return conn_list
 
+    def __util_find_conns(self, block_sid:str, connections):
+        inputs = []
+        outputs = []
+        for connection in connections:
+            if connection["Src"] == block_sid and "Dst" in connection.keys():
+                outputs.append(connection["Dst"])
+            elif connection["Src"] == block_sid and "Branch_Dst" in connection.keys():
+                outputs = outputs + connection["Branch_Dst"]
+            if "Dst" in connection.keys() and connection["Dst"] == block_sid:
+                inputs.append(connection["Src"])
+            elif "Branch_Dst" in connection.keys() and block_sid in connection["Branch_Dst"]:
+                inputs.append(connection["Src"])
+        return inputs, outputs
+
     def __util_find_file(self, target_file_name:str):
         for root, dirs, files in os.walk(self.tempFolderPath):
             if target_file_name in files:
@@ -131,10 +149,8 @@ class SimulinkParser:
         return None
 
 class GraphingInterface:
-    def __init__(self,block_list,connections,model_name="root"):
+    def __init__(self,block_list,model_name="root"):
         self.blocks = block_list
-        self.conns = connections
-        self.visualize(self.conns,model_name)
 
     @staticmethod
     def find_block(input_block_list, prop, value):
@@ -169,6 +185,15 @@ class GraphingInterface:
             return dot.node(block["Name"], "Constant", shape='box', tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "If":
             return dot.node(block["Name"], block["BlockType"] + "\n" + block["IfExpression"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
+        elif block["BlockType"] == "BusCreator":
+            ports = block["Ports"]
+            string_in = ""
+            port_split = ports.replace("[","").replace("]","").split(",")
+            if len(port_split) == 2:
+                for i in range(1,int(port_split[0])+1):
+                    string_in += "<in" + str(i) + "> In " + str(i) + " |"
+                string_in += "<out> Out"
+                dot.node(block["Name"], label= string_in, shape='record',tooltip=GraphingInterface.__get_block_val(block))
         else:
             return dot.node(block["Name"], block["Name"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
 
@@ -182,7 +207,7 @@ class GraphingInterface:
         )
         return '\n'.join(lines)
 
-    def visualize(self,connections:list,name:str):
+    def visualize(self,name:str):
         dot = Digraph(comment='Custom Node Shapes')
         dot.attr(rankdir='LR')
 
