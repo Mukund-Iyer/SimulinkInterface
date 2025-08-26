@@ -17,7 +17,7 @@ class SimulinkModel:
         if os.path.isdir(self.__tempFolderPath):
             shutil.rmtree(self.__tempFolderPath)
         self.block_list = sp.blocks
-        #self.GraphingObject = GraphingInterface(self.block_list)
+        self.GraphingObject = GraphingInterface(self.block_list)
 
     def __util_unzip_files(self):
         file_path_list = []
@@ -62,31 +62,27 @@ class SimulinkParser:
         for parameter in parameters:
             temp[list(parameter.attrib.values())[0]] = parameter.text
         if mask_detection is not None:
+            temp["Mask"] = {}
             if mask_detection.find("Type") is not None:
-                temp["Mask_Type"] = mask_detection.find("Type").text
+                temp["Mask"]["Type"] = mask_detection.find("Type").text
             if mask_detection.find("Help") is not None:
-                temp["Mask_Help"] = mask_detection.find("Help").text
+                temp["Mask"]["Help"] = mask_detection.find("Help").text
             mask_param = mask_detection.find("MaskParameter")
             if mask_param is not None:
-                mask_param_value = mask_param.find("Value").text
-                mask_param = mask_param.attrib
-                mask_param = {f"Mask_Parameter_{key}": value for key, value in mask_param.items()}
-                mask_param["Mask_Parameter_Value"] = mask_param_value
-                temp = temp | mask_param
-
+                temp["Mask"]["Parameter"] = mask_param.attrib
+                temp["Mask"]["Parameter"]["Value"] = mask_param.find("Value").text
         if system_ref_detect is not None:
             ref = list(system_ref_detect.attrib.values())[0]
             tree_output = eT.parse(self.__util_find_file(ref + ".xml"))
             temp["children"] = self.__util_parse_tree(tree_output.getroot(),temp["SID"])
-
         if port_detect is not None:
             params = port_detect.findall("P")
             for param in params:
                 temp["Port_" + list(param.attrib.values())[0]] = param.text
-
         in_ports, out_ports = self.__util_find_conns(temp["SID"], connections)
-        temp["in_connections"] = in_ports
-        temp["out_connections"] = out_ports
+        temp["ports"] = {}
+        temp["ports"]["In"] = in_ports
+        temp["ports"]["Out"] = out_ports
 
         return temp
 
@@ -151,6 +147,66 @@ class SimulinkParser:
 class GraphingInterface:
     def __init__(self,block_list,model_name="root"):
         self.blocks = block_list
+        self.__generate_model(model_name)
+
+    @staticmethod
+    def __generate_label(block):
+        in_label = ""
+        out_label = ""
+        match (block["BlockType"]):
+            case "Inport" | "Outport":
+                if "Port" in block.keys():
+                    label = "Port_" + block["Port"]
+                else:
+                    label = "Port_1"
+            case "SubSystem":
+                label = block["Name"]
+            case "Logic" | "RelationalOperator":
+                if "Operator" not in block.keys():
+                    label = block["Name"]
+                else:
+                    label = "Operator(" + block["Operator"] + ")"
+            case "Constant":
+                label = "-C-"
+            case "If":
+                label = "If(" + block["IfExpression"] + ")"
+            case "BusCreator" | "BusSelector":
+                label = block["BlockType"]
+            case _:
+                label = block["Name"]
+
+        for iterator in range(0,len(block["ports"]["In"])):
+            in_label += "<in" + str(iterator) + "> In " + str(iterator) + " |"
+        if in_label != "":
+            in_label = "{" + in_label[:-2] + "}"
+        for iterator in range(0, len(block["ports"]["Out"])):
+            out_label += "<out" + str(iterator) + "> Out " + str(iterator) + " |"
+        if out_label != "":
+            out_label = "{" + out_label[:-2] + "}"
+
+        if in_label != "" and out_label != "":
+            label = "{ " + in_label + " | " + label + " | " + out_label + " }"
+        elif out_label != "":
+            label = "{ " + label + " | " + out_label + " }"
+        elif in_label != "":
+            label = "{ " + in_label + " | " + label + " }"
+
+        return label
+
+    @staticmethod
+    def __util_create_node(dot,block):
+        tooltip_value = GraphingInterface.__get_block_val(block)
+        label = GraphingInterface.__generate_label(block)
+        match(block["BlockType"]):
+            case "Inport" | "Outport":
+                dot.node(block["SID"], label, shape='record', style='rounded', tooltip = tooltip_value)
+            case "SubSystem":
+                probable_path = os.path.join(os.getcwd(), "output", block["SID"] + ".svg")
+                if not os.path.isfile(probable_path):
+                    GraphingInterface(block["children"], block["SID"])
+                dot.node(block["SID"], label, shape='record', height='3', URL=probable_path,tooltip=tooltip_value)
+            case _:
+                dot.node(block["SID"], label, shape='record', tooltip=tooltip_value)
 
     @staticmethod
     def find_block(input_block_list, prop, value):
@@ -165,70 +221,47 @@ class GraphingInterface:
         return None
 
     @staticmethod
-    def __util_set_node(dot,block):
-        if block["BlockType"] == "Inport" or block["BlockType"] == "Outport":
-            if "Port" in block.keys():
-                return dot.node(block["Name"], block["Port"], shape='box', style='rounded',tooltip=GraphingInterface.__get_block_val(block))
-            else:
-                return dot.node(block["Name"], "1", shape='box', style='rounded', tooltip=GraphingInterface.__get_block_val(block))
-        elif block["BlockType"] == "SubSystem":
-            probable_path = os.path.join(os.getcwd(), "output", block["Name"] + ".svg")
-            if not os.path.isfile(probable_path):
-                GraphingInterface(block["children"], block["child_conns"], block["Name"])
-            return dot.node(block["Name"], block["Name"], shape='box', height = '3', URL=block["Name"] + ".svg", tooltip=GraphingInterface.__get_block_val(block))
-        elif block["BlockType"] == "Logic" or block["BlockType"] == "RelationalOperator":
-            if "Operator" not in block.keys():
-                return dot.node(block["Name"], block["Name"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
-            else:
-                return dot.node(block["Name"], block["Operator"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
-        elif block["BlockType"] == "Constant":
-            return dot.node(block["Name"], "Constant", shape='box', tooltip=GraphingInterface.__get_block_val(block))
-        elif block["BlockType"] == "If":
-            return dot.node(block["Name"], block["BlockType"] + "\n" + block["IfExpression"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
-        elif block["BlockType"] == "BusCreator":
-            ports = block["Ports"]
-            string_in = ""
-            port_split = ports.replace("[","").replace("]","").split(",")
-            if len(port_split) == 2:
-                for i in range(1,int(port_split[0])+1):
-                    string_in += "<in" + str(i) + "> In " + str(i) + " |"
-                string_in += "<out> Out"
-                dot.node(block["Name"], label= string_in, shape='record',tooltip=GraphingInterface.__get_block_val(block))
-        else:
-            return dot.node(block["Name"], block["Name"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
-
-    @staticmethod
     def __get_block_val(block):
-        excluded_keys = {'children', 'child_conns','Mask_Help'}
+        excluded_keys = {'children'}
         lines = (
             f"{k}: {v}"
             for k, v in block.items()
-            if k not in excluded_keys and not str(k).startswith("Mask_Parameter")
+            if k not in excluded_keys
         )
         return '\n'.join(lines)
 
-    def visualize(self,name:str):
+    def __generate_model(self,name):
         dot = Digraph(comment='Custom Node Shapes')
         dot.attr(rankdir='LR')
 
-        for connection in connections:
-            src_block_sid = connection["Src"]
-            if "Dst" in connection.keys():
-                dst_block_sids = connection["Dst"]
-            else:
-                dst_block_sids = connection["Branch_Dst"]
-            src_block = GraphingInterface.find_block(self.blocks, "SID", src_block_sid)
-            GraphingInterface.__util_set_node(dot, src_block)
-            #dot.node(src_block["Name"], src_block["Name"], shape='box')
-            if isinstance(dst_block_sids,list):
-                for dst_blk_sid in dst_block_sids:
-                    dst_block = GraphingInterface.find_block(self.blocks, "SID", dst_blk_sid)
-                    GraphingInterface.__util_set_node(dot, dst_block)
-                    #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
-                    dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
-            elif isinstance(dst_block_sids,str):
-                dst_block = GraphingInterface.find_block(self.blocks, "SID", dst_block_sids)
-                GraphingInterface.__util_set_node(dot, dst_block)
-                #dot.node(dst_block["Name"], dst_block["Name"], shape='box')
-                dot.edge(src_block["Name"], dst_block["Name"],tailport='e', headport='w')
+        for block in self.blocks:
+            GraphingInterface.__util_create_node(dot,block)
+
+        added_edges = set()
+
+        for block in self.blocks:
+            for i, src in enumerate(block["ports"]["In"]):
+                edge = (src, block["SID"], "in", i)
+                if edge not in added_edges:
+                    dot.edge(src + ":out" + str(i), block["SID"] + ":in" + str(i))#, tailport='e', headport='w')
+                    added_edges.add(edge)
+
+            for i, dst in enumerate(block["ports"]["Out"]):
+                edge = (block["SID"], dst, "out", i)
+                if edge not in added_edges:
+                    dot.edge(block["SID"] + ":out" + str(i), dst + ":in" + str(i))#, tailport='e', headport='w')
+                    added_edges.add(edge)
+
+        """
+        for block in self.blocks:
+            in_count = 0
+            out_count = 0
+            for iterator in range(0,len(block["ports"]["In"])):
+                dot.edge(block["ports"]["In"][iterator] + ":out" + str(in_count), block["SID"] + ":" + "in" + str(iterator), tailport='e', headport='w')
+                in_count += 1
+            for iterator in range(0,len(block["ports"]["Out"])):
+                dot.edge(block["SID"] + ":" + "out" + str(iterator),block["ports"]["Out"][iterator] + ":in" + str(out_count), tailport='e', headport='w')
+                out_count += 1
+        """
         dot.render(os.path.join(os.getcwd(),"output",name), format='svg', cleanup=True)
+        print("")
