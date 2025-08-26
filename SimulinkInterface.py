@@ -151,19 +151,22 @@ class GraphingInterface:
     @staticmethod
     def __util_set_node(dot,block):
         if block["BlockType"] == "Inport" or block["BlockType"] == "Outport":
-            return dot.node(block["Name"], block["Name"], shape='box', style='rounded', tooltip=GraphingInterface.__get_block_val(block))
+            if "Port" in block.keys():
+                return dot.node(block["Name"], block["Port"], shape='box', style='rounded',tooltip=GraphingInterface.__get_block_val(block))
+            else:
+                return dot.node(block["Name"], "1", shape='box', style='rounded', tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "SubSystem":
             probable_path = os.path.join(os.getcwd(), "output", block["Name"] + ".svg")
             if not os.path.isfile(probable_path):
                 GraphingInterface(block["children"], block["child_conns"], block["Name"])
-            return dot.node(block["Name"], block["Name"], shape='box', URL=block["Name"] + ".svg", tooltip=GraphingInterface.__get_block_val(block))
+            return dot.node(block["Name"], block["Name"], shape='box', height = '3', URL=block["Name"] + ".svg", tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "Logic" or block["BlockType"] == "RelationalOperator":
             if "Operator" not in block.keys():
                 return dot.node(block["Name"], block["Name"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
             else:
                 return dot.node(block["Name"], block["Operator"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "Constant":
-            return dot.node(block["Name"], block["Value"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
+            return dot.node(block["Name"], "Constant", shape='box', tooltip=GraphingInterface.__get_block_val(block))
         elif block["BlockType"] == "If":
             return dot.node(block["Name"], block["BlockType"] + "\n" + block["IfExpression"], shape='box', tooltip=GraphingInterface.__get_block_val(block))
         else:
