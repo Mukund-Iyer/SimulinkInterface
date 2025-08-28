@@ -233,7 +233,7 @@ class GraphingInterface:
 
     def __generate_model(self,name):
         dot = Digraph(comment='Custom Node Shapes')
-        dot.attr(rankdir='LR')
+        dot.attr(rankdir='LR', ranksep="2.4")
 
         for block in self.blocks:
             GraphingInterface.__util_create_node(dot,block)
@@ -254,17 +254,4 @@ class GraphingInterface:
                 if edge not in added_edges:
                     dot.edge(block["SID"] + ":out" + str(i), dst + ":in" + str(dst_blk["ports"]["In"].index(block["SID"])))#, tailport='e', headport='w')
                     added_edges.append(edge)
-
-        """
-        for block in self.blocks:
-            in_count = 0
-            out_count = 0
-            for iterator in range(0,len(block["ports"]["In"])):
-                dot.edge(block["ports"]["In"][iterator] + ":out" + str(in_count), block["SID"] + ":" + "in" + str(iterator), tailport='e', headport='w')
-                in_count += 1
-            for iterator in range(0,len(block["ports"]["Out"])):
-                dot.edge(block["SID"] + ":" + "out" + str(iterator),block["ports"]["Out"][iterator] + ":in" + str(out_count), tailport='e', headport='w')
-                out_count += 1
-        """
         dot.render(os.path.join(os.getcwd(),"output",name), format='svg', cleanup=True)
-        print("")
