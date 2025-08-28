@@ -124,7 +124,8 @@ class SimulinkParser:
             conn_list.append(temp)
         return conn_list
 
-    def __util_find_conns(self, block_sid:str, connections):
+    @staticmethod
+    def __util_find_conns(block_sid:str, connections):
         inputs = []
         outputs = []
         for connection in connections:
@@ -136,7 +137,7 @@ class SimulinkParser:
                 inputs.append(connection["Src"])
             elif "Branch_Dst" in connection.keys() and block_sid in connection["Branch_Dst"]:
                 inputs.append(connection["Src"])
-        return inputs, outputs
+        return list(dict.fromkeys(inputs)), list(dict.fromkeys(outputs))
 
     def __util_find_file(self, target_file_name:str):
         for root, dirs, files in os.walk(self.tempFolderPath):
