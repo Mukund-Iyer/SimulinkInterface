@@ -1,48 +1,94 @@
 import shutil
 import xml.etree.ElementTree as eT
 import os
+from pathlib import Path
 import zipfile
 from graphviz import Digraph
+import ast
+
 
 class SimulinkModel:
     def __init__(self, model_path):
-        self.__model_path = model_path
-        self.__tempFolderPath = os.path.join(os.getcwd(), "temp")
-        file_path_list = self.__util_unzip_files()
+        print("Initializing Simulink Model...")
+        self.modelPath = model_path
+        self.artifacts_folder = Path("ci", "artifacts")
+        self.output_path = os.path.join(os.getcwd(), "output")
+        tempFolderPath = Path(os.getcwd(), "temp")
+        file_path_list = self.__util_unzip_files(model_path, tempFolderPath)
         for file_path in file_path_list:
             if file_path.endswith("system_root.xml"):
                 self.tree = eT.parse(file_path)
                 break
-        sp = SimulinkParser(self.tree, self.__tempFolderPath)
-        if os.path.isdir(self.__tempFolderPath):
-            shutil.rmtree(self.__tempFolderPath)
+        sp = SimulinkParser(self.tree, tempFolderPath)
+        if os.path.isdir(tempFolderPath):
+            shutil.rmtree(tempFolderPath)
         self.block_list = sp.blocks
-        self.GraphingObject = GraphingInterface(self.block_list)
 
-    def __util_unzip_files(self):
+    def __del__(self):
+        pathx = Path(self.modelPath)
+        if self.__util_zip_file(pathx.stem) is None:
+            print(f"No cleanup required as folder named 'output' does not exist.")
+
+    def __util_unzip_files(self, model_path, temp_folder_path):
+        print("Reading Simulink Model...")
         file_path_list = []
-
-        with zipfile.ZipFile(self.__model_path, 'r') as zip_ref:
-            zip_ref.extractall(self.__tempFolderPath)
+        tempFolderPath = Path(os.getcwd(), "temp")
+        with zipfile.ZipFile(model_path, 'r') as zip_ref:
+            zip_ref.extractall(tempFolderPath)
             extracted_files = zip_ref.filelist
 
         for file in extracted_files:
-            file_path_list.append(os.path.join(self.__tempFolderPath, file.filename.replace("/", "\\")))
+            file_path_list.append(os.path.join(tempFolderPath, file.filename))
 
         return file_path_list
 
+    def __util_zip_file(self, zip_name: str) -> str:
+        out = Path("output")
+        zip_path = self.artifacts_folder / f"{zip_name}.zip"
+        if not (out.is_dir()):
+            # raise FileNotFoundError(f"{out} does not exist")
+            return None
+
+        zip_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for root, _, files in os.walk(out):
+                for fname in sorted(files):  # stable order
+                    fpath = Path(root) / fname
+                    zf.write(fpath, fpath.relative_to(out))
+        # shutil.rmtree(out)
+        return str(zip_path)
+
+    def find_block(self, input_block_list, prop, value):
+        found_list = []
+        if input_block_list:
+            for block in input_block_list:
+                if prop in block and block[prop] == value:
+                    found_list.append(block)
+                if "children" in block.keys():
+                    result = self.find_block(block["children"], prop, value)
+                    if result:
+                        found_list = found_list + result
+        return found_list
+
+    def graph_model(self):
+        print("Proceeding to graph the model...")
+        self.GraphingObject = GraphingInterface(self.block_list)
+
+
 class SimulinkParser:
-    def __init__(self,input_tree,temp_folder_path):
+    def __init__(self, input_tree, temp_folder_path):
+        print("Parsing Simulink model...")
         self.tree = input_tree
         self.tempFolderPath = temp_folder_path
         self.blocks = self.__util_parse_tree(self.tree.getroot())
 
-    def __util_parse_tree(self,element,parent="root"):
+    def __util_parse_tree(self, element, parent="root"):
         block_list = element.findall("Block")
         conn_list = self.__util_find_all_conns(element)
         new_block_list = []
         for block in block_list:
-            simulink_block = self.__util_blk_info(block,conn_list)
+            simulink_block = self.__util_blk_info(block, conn_list)
             simulink_block["Parent_SID"] = parent
             new_block_list.append(simulink_block)
         return new_block_list
@@ -74,7 +120,7 @@ class SimulinkParser:
         if system_ref_detect is not None:
             ref = list(system_ref_detect.attrib.values())[0]
             tree_output = eT.parse(self.__util_find_file(ref + ".xml"))
-            temp["children"] = self.__util_parse_tree(tree_output.getroot(),temp["SID"])
+            temp["children"] = self.__util_parse_tree(tree_output.getroot(), temp["SID"])
         if port_detect is not None:
             params = port_detect.findall("P")
             for param in params:
@@ -86,7 +132,7 @@ class SimulinkParser:
 
         return temp
 
-    def __util_branch_handling(self,branch,temp):
+    def __util_branch_handling(self, branch, temp):
         branch_params = branch.findall("P")
         nested_branch_detect = branch.findall("Branch")
         for branch_param in branch_params:
@@ -103,7 +149,7 @@ class SimulinkParser:
                     temp["Branch_" + branch_param.attrib['Name']] = branch_param.text.split("#")[0]
         if nested_branch_detect:
             for branch in nested_branch_detect:
-                temp = self.__util_branch_handling(branch,temp)
+                temp = self.__util_branch_handling(branch, temp)
         return temp
 
     def __util_find_all_conns(self, element):
@@ -119,13 +165,13 @@ class SimulinkParser:
 
             if branches:
                 for branch in branches:
-                    temp = self.__util_branch_handling(branch,temp)
+                    temp = self.__util_branch_handling(branch, temp)
 
             conn_list.append(temp)
         return conn_list
 
     @staticmethod
-    def __util_find_conns(block_sid:str, connections):
+    def __util_find_conns(block_sid: str, connections):
         inputs = []
         outputs = []
         for connection in connections:
@@ -139,14 +185,15 @@ class SimulinkParser:
                 inputs.append(connection["Src"])
         return list(dict.fromkeys(inputs)), list(dict.fromkeys(outputs))
 
-    def __util_find_file(self, target_file_name:str):
+    def __util_find_file(self, target_file_name: str):
         for root, dirs, files in os.walk(self.tempFolderPath):
             if target_file_name in files:
                 return os.path.join(root, target_file_name)
         return None
 
+
 class GraphingInterface:
-    def __init__(self,block_list,model_name="root"):
+    def __init__(self, block_list, model_name="root"):
         self.blocks = block_list
         self.__generate_model(model_name)
 
@@ -166,7 +213,7 @@ class GraphingInterface:
                 if "Operator" not in block.keys():
                     label = block["Name"]
                 else:
-                    label = "Operator(" + block["Operator"] + ")"
+                    label = "Operator " + block["Operator"].replace("<", "\\<").replace(">", "\\>")
             case "Constant":
                 label = "-C-"
             case "If":
@@ -176,14 +223,16 @@ class GraphingInterface:
             case _:
                 label = block["Name"]
 
-        for iterator in range(0,len(block["ports"]["In"])):
-            in_label += "<in" + str(iterator) + "> In " + str(iterator) + " |"
+        for iterator in range(0, len(block["ports"]["In"])):
+            in_label += "<in" + str(iterator) + "> In " + str(iterator) + " | "
         if in_label != "":
-            in_label = "{" + in_label[:-2] + "}"
+            in_label = "{" + in_label[:-3] + "}"
+            # in_label = in_label[:-3]
         for iterator in range(0, len(block["ports"]["Out"])):
-            out_label += "<out" + str(iterator) + "> Out " + str(iterator) + " |"
+            out_label += "<out" + str(iterator) + "> Out " + str(iterator) + " | "
         if out_label != "":
-            out_label = "{" + out_label[:-2] + "}"
+            out_label = "{" + out_label[:-3] + "}"
+            # out_label = out_label[:-3]
 
         if in_label != "" and out_label != "":
             label = "{ " + in_label + " | " + label + " | " + out_label + " }"
@@ -194,29 +243,41 @@ class GraphingInterface:
 
         return label
 
-    @staticmethod
-    def __util_create_node(dot,block):
+    def __util_create_node(self, dot, block):
         tooltip_value = GraphingInterface.__get_block_val(block)
         label = GraphingInterface.__generate_label(block)
-        match(block["BlockType"]):
+        block_width, block_height = GraphingInterface.__util_calc_dims(block)
+        match (block["BlockType"]):
             case "Inport" | "Outport":
-                dot.node(block["SID"], label, shape='record', style='rounded', tooltip = tooltip_value)
+                dot.node(block["SID"], label, shape='record', width=str(block_width), height=str(block_height),
+                         style='rounded', tooltip=tooltip_value)
             case "SubSystem":
-                probable_path = os.path.join(os.getcwd(), "output", block["SID"] + ".svg")
-                if not os.path.isfile(probable_path):
+                # probable_path = Path(os.path.join(os.getcwd(),"output"), block["SID"] + ".svg")
+                probable_path = Path(block["SID"] + ".svg")
+                if not probable_path.is_file():
                     GraphingInterface(block["children"], block["SID"])
-                dot.node(block["SID"], label, shape='record', height='3', URL=probable_path,tooltip=tooltip_value)
+                dot.node(block["SID"], label, shape='record', width=str(block_width), height=str(block_height),
+                         URL=str(probable_path), tooltip=tooltip_value)
             case _:
-                dot.node(block["SID"], label, shape='record', tooltip=tooltip_value)
+                dot.node(block["SID"], label, shape='record', width=str(block_width), height=str(block_height),
+                         tooltip=tooltip_value)
 
     @staticmethod
-    def find_block(input_block_list, prop, value):
+    def __util_calc_dims(block):
+        position_string = block["Position"]
+        position = ast.literal_eval(position_string)
+        width = position[2] - position[0]
+        height = position[3] - position[1]
+        return width * 0.01, height * 0.01
+
+    @staticmethod
+    def __util_find_block(input_block_list, prop, value):
         if input_block_list:
             for block in input_block_list:
                 if prop in block and block[prop] == value:
                     return block
                 if "children" in block.keys():
-                    result = GraphingInterface.find_block(block["children"], prop, value)
+                    result = GraphingInterface.__util_find_block(block["children"], prop, value)
                     if result:
                         return result
         return None
@@ -231,27 +292,29 @@ class GraphingInterface:
         )
         return '\n'.join(lines)
 
-    def __generate_model(self,name):
+    def __generate_model(self, name):
         dot = Digraph(comment='Custom Node Shapes')
-        dot.attr(rankdir='LR', ranksep="2.4")
+        dot.attr(rankdir='LR', ranksep="3")
 
         for block in self.blocks:
-            GraphingInterface.__util_create_node(dot,block)
+            self.__util_create_node(dot, block)
 
         added_edges = []
 
         for block in self.blocks:
             for i, src in enumerate(block["ports"]["In"]):
                 edge = src + "->" + block["SID"]
-                src_blk = self.find_block(self.blocks,"SID",src)
+                src_blk = GraphingInterface.__util_find_block(self.blocks, "SID", src)
                 if edge not in added_edges:
-                    dot.edge(src + ":out" + str(src_blk["ports"]["Out"].index(block["SID"])), block["SID"] + ":in" + str(i))#, tailport='e', headport='w')
+                    dot.edge(src + ":out" + str(src_blk["ports"]["Out"].index(block["SID"])),
+                             block["SID"] + ":in" + str(i))  # , tailport='e', headport='w')
                     added_edges.append(edge)
 
             for i, dst in enumerate(block["ports"]["Out"]):
                 edge = block["SID"] + "->" + dst
-                dst_blk = self.find_block(self.blocks,"SID",dst)
+                dst_blk = GraphingInterface.__util_find_block(self.blocks, "SID", dst)
                 if edge not in added_edges:
-                    dot.edge(block["SID"] + ":out" + str(i), dst + ":in" + str(dst_blk["ports"]["In"].index(block["SID"])))#, tailport='e', headport='w')
+                    dot.edge(block["SID"] + ":out" + str(i), dst + ":in" + str(
+                        dst_blk["ports"]["In"].index(block["SID"])))  # , tailport='e', headport='w')
                     added_edges.append(edge)
-        dot.render(os.path.join(os.getcwd(),"output",name), format='svg', cleanup=True)
+        dot.render(os.path.join(os.getcwd(), "output", name), format='svg', cleanup=True)
