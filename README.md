@@ -63,3 +63,7 @@ This project also includes components developed by:
 - AT&T and the GraphViz community, which are licensed under the Eclipse Public License (EPL). 
 
 Please refer to the respective licenses for more details.
+
+**Note**
+--------
+The project has been shifted to GitLab and is being developed there. The newer versions can also find differences between two models. Let me know if you need the link for that.
