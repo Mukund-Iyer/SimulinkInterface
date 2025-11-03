@@ -67,3 +67,6 @@ Please refer to the respective licenses for more details.
 **Note**
 --------
 The project has been shifted to GitLab and is being developed there. The newer versions can also find differences between two models. Let me know if you need the link for that.
+
+**03 November 2025**: I rewrote the entire project in C++ (17). It has been committed to a new repository. This also contains comparison or diffing of two models. Please refer the link below to access it.
+**Link**: https://github.com/Mukund-Iyer/SAGE---Simulink-Analysis-and-Graph-Evaluation
